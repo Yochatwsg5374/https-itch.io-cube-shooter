@@ -1,49 +1,65 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Cube Shooter — Upgrades</title>
-  <style>
-    html,body{height:100%;margin:0;background:#111;color:#eee;font-family:system-ui,Segoe UI,Roboto,Arial}
-    .wrap{height:100%;display:flex;align-items:center;justify-content:center;flex-direction:column}
-    canvas{background:#0b1220;border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,0.6)}
-    .ui{margin-top:12px;display:flex;gap:12px;align-items:center}
-    .btn{background:#1f2937;padding:8px 12px;border-radius:8px;color:#fff;border:0;cursor:pointer}
-    .info{font-size:14px;opacity:0.9}
-    .footer{margin-top:8px;font-size:13px;color:#9aa7b2}
-    /* Upgrades panel */
-    #upgrades{position:absolute;left:12px;top:12px;display:flex;flex-direction:column;gap:8px;z-index:60}
-    #upgrades .upg{background:rgba(30,30,40,0.9);padding:8px;border-radius:8px;color:#fff;font-size:13px;border:1px solid rgba(255,255,255,0.04)}
-    #upgrades button{margin-top:6px}
-  </style>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Cube Shooter — Upgrades & Leaderboard</title>
+<style>
+html,body{height:100%;margin:0;background:#111;color:#eee;font-family:system-ui,Segoe UI,Roboto,Arial}
+.wrap{height:100%;display:flex;align-items:center;justify-content:center;flex-direction:column}
+canvas{background:#0b1220;border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,0.6)}
+.ui{margin-top:12px;display:flex;gap:12px;align-items:center}
+.btn{background:#1f2937;padding:8px 12px;border-radius:8px;color:#fff;border:0;cursor:pointer}
+.info{font-size:14px;opacity:0.9}
+.footer{margin-top:8px;font-size:13px;color:#9aa7b2}
+#upgrades{position:absolute;left:12px;top:12px;display:flex;flex-direction:column;gap:8px;z-index:60}
+#upgrades .upg{background:rgba(30,30,40,0.9);padding:8px;border-radius:8px;color:#fff;font-size:13px;border:1px solid rgba(255,255,255,0.04)}
+#upgrades button{margin-top:6px}
+#leaderboard{position:absolute;bottom:12px;right:12px;background:rgba(0,0,0,0.6);padding:8px;border-radius:8px;color:#fff;font-size:13px;min-width:140px;}
+#leaderboard div{margin-bottom:2px;}
+</style>
 </head>
 <body>
-  <div class="wrap">
-    <canvas id="game" width="900" height="600"></canvas>
-    <div class="ui">
-      <div class="info">Score: <span id="score">0</span></div>
-      <div class="info">Health: <span id="hp">100</span></div>
-      <button id="restart" class="btn">Restart</button>
-    </div>
-    <div class="footer">Move with WASD or arrow keys · Click to shoot · Enemies are smaller cubes</div>
+<div class="wrap">
+  <canvas id="game" width="900" height="600"></canvas>
+  <div class="ui">
+    <div class="info">Score: <span id="score">0</span></div>
+    <div class="info">Health: <span id="hp">100</span></div>
+    <button id="restart" class="btn">Restart</button>
   </div>
+  <div class="footer">Move with WASD or arrow keys · Click to shoot · Enemies include tougher green cubes</div>
+</div>
 
-  <div id="upgrades">
-    <div class="upg">
-      <div style="font-weight:600;margin-bottom:6px">Upgrades (buy with Score)</div>
-      <div>Double Bullets — fires 2 bullets (ongoing)</div>
-      <button class="btn" id="buyDouble">Buy — 200</button>
-    </div>
-    <div class="upg">
-      <div style="font-weight:600;margin-bottom:6px">Higher Damage</div>
-      <div>Increase bullet damage by +0.5 (stacks)</div>
-      <button class="btn" id="buyDmg">Buy — 150</button>
-    </div>
+<div id="upgrades">
+  <div class="upg">
+    <div style="font-weight:600;margin-bottom:6px">Upgrades (buy with Score)</div>
+    <div>Double Bullets — fires 2 bullets (ongoing)</div>
+    <button class="btn" id="buyDouble">Buy — 200</button>
   </div>
+  <div class="upg">
+    <div style="font-weight:600;margin-bottom:6px">Higher Damage</div>
+    <div>Increase bullet damage by +0.5 (max 5×)</div>
+    <button class="btn" id="buyDmg">Buy — 150</button>
+  </div>
+  <div class="upg">
+    <div style="font-weight:600;margin-bottom:6px">Health Upgrade</div>
+    <div id="healthDesc">Increase Max HP (Cost: 250)</div>
+    <button class="btn" id="buyHp">Buy</button>
+  </div>
+</div>
+
+<div id="leaderboard">
+  <div style="font-weight:600;margin-bottom:6px;">Leaderboard</div>
+  <div id="leaders"></div>
+</div>
 
 <script>
-// Enhanced Cube Shooter with persistent upgrades
+// --- User & Game Setup ---
+let playerName = '';
+while(!playerName){
+  playerName = prompt("Enter your username:");
+}
+
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
 const W = canvas.width, H = canvas.height;
@@ -55,83 +71,81 @@ let enemies = [];
 let score = 0;
 let running = true;
 let lastSpawn = 0;
-let spawnInterval = 900; // ms
+let spawnInterval = 900;
 let lastTime = 0;
 
-// Upgrades (ongoing)
+// Upgrades
 let upgrades = {
   doubleBullets: false,
-  damageMult: 1
+  damageMult: 1,
+  enemySpeedMult: 1
 };
+
+// Health Upgrades
+let healthUpgrades = [250,500,1000];
+let currentHealthUpgrade = 0;
 
 const player = {
-  x: W/2,
-  y: H/2,
-  size: 36,
-  speed: 220,
-  hp: 100,
+  x: W/2, y: H/2, size:36, speed:220, hp:100,
 };
-
 const BASE_BULLET_SPEED = 520;
 const BASE_BULLET_DAMAGE = 1;
 
-function restart(){
-  bullets = [];
-  enemies = [];
-  score = 0;
-  player.x = W/2;
-  player.y = H/2;
-  player.hp = 100;
-  running = true;
-  lastSpawn = 0;
-  spawnInterval = 900;
-  document.getElementById('score').textContent = score;
-  document.getElementById('hp').textContent = player.hp;
-}
-
 document.getElementById('restart').addEventListener('click', restart);
 
+// --- Input ---
 canvas.addEventListener('mousemove', e => {
   const rect = canvas.getBoundingClientRect();
   mouse.x = e.clientX - rect.left;
   mouse.y = e.clientY - rect.top;
 });
-
 canvas.addEventListener('mousedown', e => { shootAt(mouse.x, mouse.y); });
-canvas.addEventListener('touchstart', e=>{ e.preventDefault(); const rect = canvas.getBoundingClientRect(); const t = e.touches[0]; shootAt(t.clientX - rect.left, t.clientY - rect.top); }, {passive:false});
-
-function shootAt(tx, ty){
-  const angle = Math.atan2(ty - player.y, tx - player.x);
-  spawnBullet(angle);
-  if(upgrades.doubleBullets){ spawnBullet(angle + 0.12); spawnBullet(angle - 0.12); }
-}
-
-function spawnBullet(angle){
-  const speed = BASE_BULLET_SPEED;
-  const vx = Math.cos(angle) * speed;
-  const vy = Math.sin(angle) * speed;
-  const spawnX = player.x + Math.cos(angle) * (player.size/2 + 8);
-  const spawnY = player.y + Math.sin(angle) * (player.size/2 + 8);
-  bullets.push({x: spawnX, y: spawnY, vx, vy, r:6, born: performance.now(), life: 1800, dmg: BASE_BULLET_DAMAGE * upgrades.damageMult});
-}
+canvas.addEventListener('touchstart', e=>{
+  e.preventDefault();
+  const rect = canvas.getBoundingClientRect();
+  const t = e.touches[0];
+  shootAt(t.clientX - rect.left, t.clientY - rect.top);
+},{passive:false});
 
 window.addEventListener('keydown', e => keys[e.key.toLowerCase()] = true);
 window.addEventListener('keyup', e => keys[e.key.toLowerCase()] = false);
 
-function spawnEnemy(now){
-  const size = randRange(12, 22);
-  let ex, ey;
-  const edge = Math.floor(Math.random()*4);
-  if(edge===0){ ex = -size; ey = Math.random()*H; }
-  else if(edge===1){ ex = W+size; ey = Math.random()*H; }
-  else if(edge===2){ ex = Math.random()*W; ey = -size; }
-  else { ex = Math.random()*W; ey = H+size; }
-  const speed = randRange(40, 120) + (22 - size)*6;
-  enemies.push({x:ex, y:ey, size, speed, hp: Math.max(1, Math.ceil(size/6))});
+// --- Bullet ---
+function shootAt(tx, ty){
+  const angle = Math.atan2(ty - player.y, tx - player.x);
+  spawnBullet(angle);
+  if(upgrades.doubleBullets){
+    spawnBullet(angle + 0.12);
+    spawnBullet(angle - 0.12);
+  }
+}
+function spawnBullet(angle){
+  const vx = Math.cos(angle)*BASE_BULLET_SPEED;
+  const vy = Math.sin(angle)*BASE_BULLET_SPEED;
+  const spawnX = player.x + Math.cos(angle)*(player.size/2 + 8);
+  const spawnY = player.y + Math.sin(angle)*(player.size/2 + 8);
+  bullets.push({x:spawnX, y:spawnY, vx, vy, r:6, born: performance.now(), life:1800, dmg:BASE_BULLET_DAMAGE*upgrades.damageMult});
 }
 
-function randRange(a,b){ return a + Math.random()*(b-a); }
+// --- Enemy ---
+function spawnEnemy(now){
+  const size = randRange(12,22);
+  let ex,ey;
+  const edge=Math.floor(Math.random()*4);
+  if(edge===0){ex=-size;ey=randRange(0,H);}
+  else if(edge===1){ex=W+size;ey=randRange(0,H);}
+  else if(edge===2){ex=randRange(0,W);ey=-size;}
+  else{ex=randRange(0,W);ey=H+size;}
 
+  let isHard = Math.random() < 0.15;
+  let hp = isHard ? Math.ceil(size/3) : Math.max(1, Math.ceil(size/6));
+  let color = isHard ? 'green' : 'pink';
+  let speed = (randRange(40,120)+(22-size)*6)*upgrades.enemySpeedMult;
+  enemies.push({x:ex,y:ey,size,speed,hp,color});
+}
+function randRange(a,b){return a+Math.random()*(b-a);}
+
+// --- Update ---
 function update(dt, now){
   if(!running) return;
   let dx=0,dy=0;
@@ -140,50 +154,134 @@ function update(dt, now){
   if(keys['a']||keys['arrowleft']) dx-=1;
   if(keys['d']||keys['arrowright']) dx+=1;
   const len=Math.hypot(dx,dy)||1;
-  player.x += (dx/len) * player.speed * dt;
-  player.y += (dy/len) * player.speed * dt;
-  player.x = Math.max(player.size/2, Math.min(W - player.size/2, player.x));
-  player.y = Math.max(player.size/2, Math.min(H - player.size/2, player.y));
-  bullets = bullets.filter(b => (performance.now() - b.born) < b.life && b.x > -40 && b.x < W+40 && b.y > -40 && b.y < H+40);
-  for(const b of bullets){ b.x += b.vx * dt; b.y += b.vy * dt; }
-  for(const e of enemies){ const ang=Math.atan2(player.y - e.y, player.x - e.x); e.x += Math.cos(ang)*e.speed*dt; e.y += Math.sin(ang)*e.speed*dt; }
-  for(const b of bullets){ for(const e of enemies){ if(rectCircleCollide(e.x - e.size/2,e.y - e.size/2,e.size,e.size,b.x,b.y,b.r)){ e.hp -= b.dmg; b.born=-1e9; if(e.hp<=0){ score+=Math.floor(10+(30-e.size)); if(Math.random()<0.12&&e.size>14){ for(let i=0;i<2;i++){ enemies.push({x:e.x+randRange(-6,6),y:e.y+randRange(-6,6),size:Math.max(8,e.size/2),speed:e.speed*1.15,hp:Math.max(1,Math.floor(e.hp+1))}); } } e.dead=true; } } } }
-  enemies = enemies.filter(e=>!e.dead);
-  for(const e of enemies){ if(rectRectCollide(player.x - player.size/2,player.y - player.size/2,player.size,player.size,e.x - e.size/2,e.y - e.size/2,e.size,e.size)){ player.hp -= Math.max(4,Math.floor(e.size/4)); e.dead=true; const ang=Math.atan2(player.y-e.y,player.x-e.x); player.x+=Math.cos(ang)*8; player.y+=Math.sin(ang)*8; if(player.hp<=0) running=false; } }
-  enemies = enemies.filter(e=>!e.dead);
-  if(now-lastSpawn>spawnInterval){ const adjust=Math.max(0,Math.floor(score/200)); const howMany=1+Math.min(3,adjust); for(let i=0;i<howMany;i++) spawnEnemy(now); lastSpawn=now; spawnInterval=Math.max(300,900-Math.floor(score/6)); }
-  document.getElementById('score').textContent = score;
-  document.getElementById('hp').textContent = Math.max(0,Math.floor(player.hp));
+  player.x+=dx/len*player.speed*dt;
+  player.y+=dy/len*player.speed*dt;
+  player.x=clamp(player.x,player.size/2,W-player.size/2);
+  player.y=clamp(player.y,player.size/2,H-player.size/2);
+
+  bullets = bullets.filter(b=>performance.now()-b.born<b.life && b.x>-40 && b.x<W+40 && b.y>-40 && b.y<H+40);
+  for(const b of bullets){b.x+=b.vx*dt;b.y+=b.vy*dt;}
+
+  for(const e of enemies){
+    const ang=Math.atan2(player.y-e.y,player.x-e.x);
+    e.x+=Math.cos(ang)*e.speed*dt;
+    e.y+=Math.sin(ang)*e.speed*dt;
+  }
+
+  for(const b of bullets){
+    for(const e of enemies){
+      if(rectCircleCollide(e.x-e.size/2,e.y-e.size/2,e.size,e.size,b.x,b.y,b.r)){
+        e.hp-=b.dmg;
+        b.born=-1e9;
+        if(e.hp<=0){score+=Math.floor(10+(30-e.size));
+          if(Math.random()<0.12 && e.size>14){for(let i=0;i<2;i++){enemies.push({x:e.x+randRange(-6,6),y:e.y+randRange(-6,6),size:Math.max(8,e.size/2),speed:e.speed*1.15,hp:Math.max(1,Math.floor(e.hp+1)),color:e.color});}}
+          e.dead=true;
+        }
+      }
+    }
+  }
+  enemies=enemies.filter(e=>!e.dead);
+
+  for(const e of enemies){
+    if(rectRectCollide(player.x-player.size/2,player.y-player.size/2,player.size,player.size,e.x-e.size/2,e.y-e.size/2,e.size,e.size)){
+      player.hp-=Math.max(4,Math.floor(e.size/4));
+      e.dead=true;
+      const ang=Math.atan2(player.y-e.y,player.x-e.x);
+      player.x+=Math.cos(ang)*8;
+      player.y+=Math.sin(ang)*8;
+      if(player.hp<=0){running=false;saveScore();}
+    }
+  }
+  enemies=enemies.filter(e=>!e.dead);
+
+  if(now-lastSpawn>spawnInterval){
+    const adjust=Math.max(0,Math.floor(score/200));
+    const howMany=1+Math.min(3,adjust);
+    for(let i=0;i<howMany;i++) spawnEnemy(now);
+    lastSpawn=now;
+    spawnInterval=Math.max(300,900-Math.floor(score/6));
+  }
+
+  document.getElementById('score').textContent=score;
+  document.getElementById('hp').textContent=Math.max(0,Math.floor(player.hp));
 }
 
-function rectCircleCollide(rx,ry,rw,rh,cx,cy,cr){ const closestX=clamp(cx,rx,rx+rw); const closestY=clamp(cy,ry,ry+rh); const dx=cx-closestX; const dy=cy-closestY; return (dx*dx+dy*dy)<(cr*cr); }
-function rectRectCollide(ax,ay,aw,ah,bx,by,bw,bh){ return ax<bx+bw && ax+aw>bx && ay<by+bh && ay+ah>by; }
-function clamp(v,a,b){ return Math.max(a,Math.min(b,v)); }
+// --- Collisions ---
+function rectCircleCollide(rx,ry,rw,rh,cx,cy,cr){const closestX=clamp(cx,rx,rx+rw);const closestY=clamp(cy,ry,ry+rh);const dx=cx-closestX;const dy=cy-closestY;return dx*dx+dy*dy<cr*cr;}
+function rectRectCollide(ax,ay,aw,ah,bx,by,bw,bh){return ax<bx+bw&&ax+aw>bx&&ay<by+bh&&ay+ah>by;}
+function clamp(v,a,b){return Math.max(a,Math.min(b,v));}
 
-function draw(now){ ctx.clearRect(0,0,W,H);
-  ctx.save(); ctx.globalAlpha=0.06; ctx.strokeStyle='#fff'; ctx.lineWidth=1;
-  for(let x=0;x<W;x+=32){ ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,H); ctx.stroke(); }
-  for(let y=0;y<H;y+=32){ ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke(); }
+// --- Draw ---
+function draw(now){
+  ctx.clearRect(0,0,W,H);
+  ctx.save();ctx.globalAlpha=0.06;ctx.strokeStyle='#fff';ctx.lineWidth=1;
+  for(let x=0;x<W;x+=32){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}
+  for(let y=0;y<H;y+=32){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
   ctx.restore();
+
   const ang=Math.atan2(mouse.y-player.y,mouse.x-player.x);
-  ctx.save(); ctx.translate(player.x,player.y); ctx.rotate(ang);
-  roundedRect(ctx,-player.size/2,-player.size/2,player.size,player.size,6); ctx.fillStyle='#4cc9f0'; ctx.fill(); ctx.fillStyle='#0b1220'; ctx.fillRect(player.size/2-6,-6,12,12);
-  ctx.restore();
-  for(const b of bullets){ ctx.beginPath(); ctx.fillStyle='#ff3b3b'; ctx.arc(b.x,b.y,b.r,0,Math.PI*2); ctx.fill(); }
-  for(const e of enemies){ ctx.save(); ctx.translate(e.x,e.y); ctx.fillStyle='#e85d75'; ctx.fillRect(-e.size/2-2,-e.size/2-2,e.size+4,e.size+4); ctx.fillStyle='#ff9b9b'; ctx.fillRect(-e.size/2,-e.size/2,e.size,e.size); if(e.size>14){ const w=e.size; const hpRatio=Math.max(0,(e.hp||1)/Math.max(1,Math.ceil(e.size/6))); ctx.fillStyle='#222'; ctx.fillRect(-w/2,-e.size/2-8,w,4); ctx.fillStyle='#61ff6b'; ctx.fillRect(-w/2,-e.size/2-8,w*hpRatio,4);} ctx.restore();}
-  if(!running){ ctx.save(); ctx.fillStyle='rgba(0,0,0,0.6)'; ctx.fillRect(0,0,W,H); ctx.fillStyle='#fff'; ctx.font='36px system-ui'; ctx.textAlign='center'; ctx.fillText('GAME OVER',W/2,H/2-10); ctx.font='20px system-ui'; ctx.fillText('Score: '+score,W/2,H/2+26); ctx.restore();}
+  ctx.save();ctx.translate(player.x,player.y);ctx.rotate(ang);
+  roundedRect(ctx,-player.size/2,-player.size/2,player.size,player.size,6);ctx.fillStyle='#4cc9f0';ctx.fill();
+  ctx.fillStyle='#0b1220';ctx.fillRect(player.size/2-6,-6,12,12);ctx.restore();
+
+  for(const b of bullets){ctx.beginPath();ctx.fillStyle='#ff3b3b';ctx.arc(b.x,b.y,b.r,0,Math.PI*2);ctx.fill();}
+
+  for(const e of enemies){
+    ctx.save();ctx.translate(e.x,e.y);
+    ctx.fillStyle=e.color==='green'?'#0f9d58':'#e85d75';
+    ctx.fillRect(-e.size/2-2,-e.size/2-2,e.size+4,e.size+4);
+    ctx.fillStyle=e.color==='green'?'#61ff6b':'#ff9b9b';
+    ctx.fillRect(-e.size/2,-e.size/2,e.size,e.size);
+    if(e.size>14){const w=e.size;const hpRatio=Math.max(0,(e.hp||1)/Math.max(1,Math.ceil(e.size/6)));ctx.fillStyle='#222';ctx.fillRect(-w/2,-e.size/2-8,w,4);ctx.fillStyle='#61ff6b';ctx.fillRect(-w/2,-e.size/2-8,w*hpRatio,4);}
+    ctx.restore();
+  }
+
+  if(!running){ctx.save();ctx.fillStyle='rgba(0,0,0,0.6)';ctx.fillRect(0,0,W,H);ctx.fillStyle='#fff';ctx.font='36px system-ui';ctx.textAlign='center';ctx.fillText('GAME OVER',W/2,H/2-10);ctx.font='20px system-ui';ctx.fillText('Score: '+score,W/2,H/2+26);ctx.restore();}
 }
+function roundedRect(ctx,x,y,w,h,r){ctx.beginPath();ctx.moveTo(x+r,y);ctx.arcTo(x+w,y,x+w,y+h,r);ctx.arcTo(x+w,y+h,x,y+h,r);ctx.arcTo(x,y+h,x,y,r);ctx.arcTo(x,y,x+w,y,r);ctx.closePath();}
 
-function roundedRect(ctx,x,y,w,h,r){ ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r); ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath(); }
-
-function loop(ts){ if(!lastTime) lastTime=ts; const dt=Math.min(0.05,(ts-lastTime)/1000); update(dt,ts); draw(ts); lastTime=ts; requestAnimationFrame(loop); }
+// --- Loop ---
+function loop(ts){if(!lastTime) lastTime=ts;const dt=Math.min(0.05,(ts-lastTime)/1000);update(dt,ts);draw(ts);lastTime=ts;requestAnimationFrame(loop);}
 requestAnimationFrame(loop);
 
-// Upgrade buttons
+// --- Upgrades ---
+document.getElementById('buyDouble').addEventListener('click', ()=>{
+  if(score>=200 && !upgrades.doubleBullets){score-=200;upgrades.doubleBullets=true;document.getElementById('buyDouble').textContent='Owned';}
+});
+document.getElementById('buyDmg').addEventListener('click', ()=>{
+  if(score>=150 && upgrades.damageMult<5){score-=150;upgrades.damageMult+=0.5;for(const b of bullets)b.dmg=BASE_BULLET_DAMAGE*upgrades.damageMult;}
+});
+document.getElementById('buyHp').addEventListener('click', ()=>{
+  if(currentHealthUpgrade<healthUpgrades.length && score>=healthUpgrades[currentHealthUpgrade]){
+    score-=healthUpgrades[currentHealthUpgrade];
+    player.hp+=50;
+    currentHealthUpgrade++;
+    if(currentHealthUpgrade<healthUpgrades.length){document.getElementById('healthDesc').textContent=`Increase Max HP (Cost: ${healthUpgrades[currentHealthUpgrade]})`;}
+    else{document.getElementById('healthDesc').textContent='Health upgrades maxed';document.getElementById('buyHp').disabled=true;}
+  }
+});
 
-document.getElementById('buyDouble').addEventListener('click', ()=>{ if(score>=200&&!upgrades.doubleBullets){ score-=200; upgrades.doubleBullets=true; document.getElementById('buyDouble').textContent='Owned'; }});
-document.getElementById('buyDmg').addEventListener('click', ()=>{ if(score>=150){ score-=150; upgrades.damageMult+=0.5; for(const b of bullets) b.dmg=(b.dmg||BASE_BULLET_DAMAGE)*(upgrades.damageMult); }});
+// --- Leaderboard ---
+function saveScore(){
+  const scores = JSON.parse(localStorage.getItem('cubeShooterScores')||'[]');
+  scores.push({name:playerName,score});
+  scores.sort((a,b)=>b.score-a.score);
+  localStorage.setItem('cubeShooterScores',JSON.stringify(scores.slice(0,3)));
+  updateLeaderboard();
+}
+function updateLeaderboard(){
+  const leadersDiv=document.getElementById('leaders');
+  const scores=JSON.parse(localStorage.getItem('cubeShooterScores')||'[]');
+  leadersDiv.innerHTML=scores.map(s=>`${s.name}: ${s.score}`).join('<br>');
+}
+updateLeaderboard();
 
+// --- Restart ---
+function restart(){
+  bullets=[];enemies=[];score=0;player.x=W/2;player.y=H/2;player.hp=100;running=true;lastSpawn=0;spawnInterval=900;
+  document.getElementById('score').textContent=score;
+  document.getElementById('hp').textContent=player.hp;
+}
 </script>
 </body>
 </html>
